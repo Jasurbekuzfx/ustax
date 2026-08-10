@@ -1,6 +1,7 @@
 import asyncio
 import os
 import uuid
+import shutil
 import yt_dlp
 
 import config
@@ -10,12 +11,37 @@ SEARCH_CACHE = {}
 YOUTUBE_COOKIES = "/etc/secrets/youtube_cookies.txt"
 PO_TOKEN_SERVER = "/app/bgutil-ytdlp-pot-provider/server"
 
+def get_writable_cookies():
+    source = "/etc/secrets/youtube_cookies.txt"
+    target = os.path.join(config.TEMP_DIR, "youtube_cookies_runtime.txt")
+
+    if not os.path.exists(source):
+        raise FileNotFoundError(
+            "YouTube cookie fayli topilmadi: /etc/secrets/youtube_cookies.txt"
+        )
+
+    shutil.copyfile(source, target)
+    return target
+def get_writable_cookies():
+    source = "/etc/secrets/youtube_cookies.txt"
+    target = os.path.join(config.TEMP_DIR, "youtube_cookies_runtime.txt")
+
+    if not os.path.exists(source):
+        raise FileNotFoundError(
+            "YouTube cookie fayli topilmadi: /etc/secrets/youtube_cookies.txt"
+        )
+
+    shutil.copyfile(source, target)
+    return target
+
 
 def _youtube_opts():
+    writable_cookies = get_writable_cookies()
+
     return {
         "quiet": True,
         "no_warnings": True,
-        "cookiefile": YOUTUBE_COOKIES,
+        "cookiefile": writable_cookies,
 
         "extractor_args": {
             "youtubepot-bgutilscript": {
@@ -23,7 +49,6 @@ def _youtube_opts():
             }
         },
     }
-
 
 def search_youtube_flat(query: str, limit: int = 10) -> list:
     ydl_opts = _youtube_opts()

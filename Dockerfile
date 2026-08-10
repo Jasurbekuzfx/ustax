@@ -1,20 +1,34 @@
 FROM python:3.11-slim
 
-# Tizim paketlarini yangilash va ffmpeg o'rnatish
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
+    curl \
+    ca-certificates \
+    git \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Ishchi katalogni yaratish
+# Node.js 20
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
-# Kutubxonalar ro'yxatini ko'chirish va o'rnatish
 COPY requirements.txt .
+
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Loyihaning barcha fayllarini ko'chirish
+# YouTube PO Token Provider
+RUN git clone --depth 1 \
+    https://github.com/Brainicism/bgutil-ytdlp-pot-provider.git \
+    /app/bgutil-ytdlp-pot-provider
+
+RUN cd /app/bgutil-ytdlp-pot-provider/server \
+    && npm ci \
+    && npx tsc
+
 COPY . .
 
-# Botni ishga tushirish buyrug'i
 CMD ["python", "bot.py"]

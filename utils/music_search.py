@@ -7,18 +7,31 @@ import config
 
 SEARCH_CACHE = {}
 
-
 YOUTUBE_COOKIES = "/etc/secrets/youtube_cookies.txt"
+PO_TOKEN_SERVER = "/app/bgutil-ytdlp-pot-provider/server"
 
 
-def search_youtube_flat(query: str, limit: int = 10) -> list:
-    ydl_opts = {
-        "extract_flat": True,
-        "skip_download": True,
+def _youtube_opts():
+    return {
         "quiet": True,
         "no_warnings": True,
         "cookiefile": YOUTUBE_COOKIES,
+
+        "extractor_args": {
+            "youtubepot-bgutilscript": {
+                "server_home": PO_TOKEN_SERVER,
+            }
+        },
     }
+
+
+def search_youtube_flat(query: str, limit: int = 10) -> list:
+    ydl_opts = _youtube_opts()
+
+    ydl_opts.update({
+        "extract_flat": True,
+        "skip_download": True,
+    })
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(
@@ -48,7 +61,10 @@ def search_youtube_flat(query: str, limit: int = 10) -> list:
                 "video_id": video_id,
                 "title": title,
                 "artist": artist,
-                "duration_str": f"{int(duration // 60):02d}:{int(duration % 60):02d}",
+                "duration_str": (
+                    f"{int(duration // 60):02d}:"
+                    f"{int(duration % 60):02d}"
+                ),
                 "duration": duration,
             })
 
@@ -57,28 +73,30 @@ def search_youtube_flat(query: str, limit: int = 10) -> list:
 
 def download_yt_audio_sync(video_id: str) -> tuple:
     unique_id = str(uuid.uuid4())
-    download_dir = os.path.join(config.TEMP_DIR, unique_id)
+    download_dir = os.path.join(
+        config.TEMP_DIR,
+        unique_id
+    )
     os.makedirs(download_dir, exist_ok=True)
 
     url = f"https://www.youtube.com/watch?v={video_id}"
 
-    ydl_opts = {
+    ydl_opts = _youtube_opts()
+
+    ydl_opts.update({
         "format": "bestaudio/best",
+
         "outtmpl": os.path.join(
             download_dir,
             "%(title).50s.%(ext)s"
         ),
+
         "postprocessors": [{
             "key": "FFmpegExtractAudio",
             "preferredcodec": "mp3",
             "preferredquality": "192",
         }],
-        "quiet": True,
-        "no_warnings": True,
-
-        # Render Secret File
-        "cookiefile": YOUTUBE_COOKIES,
-    }
+    })
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([url])

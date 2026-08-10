@@ -12,34 +12,47 @@ import config
 SEARCH_CACHE = {}
 
 COOKIES_SOURCE = "/etc/secrets/youtube_cookies.txt"
+
 COOKIE_DIR = os.path.join(
     tempfile.gettempdir(),
     "ustax_cookies"
 )
 
+PO_TOKEN_SERVER = "/app/bgutil-ytdlp-pot-provider/server"
+
 
 def get_writable_cookies():
     """
     Render Secret File read-only.
-    Uni /tmp ichiga nusxalaymiz.
+    Cookie faylini /tmp ichiga ko'chiramiz.
     """
 
     if not os.path.isfile(COOKIES_SOURCE):
         return None
 
-    os.makedirs(COOKIE_DIR, exist_ok=True)
+    os.makedirs(
+        COOKIE_DIR,
+        exist_ok=True
+    )
 
     cookie_path = os.path.join(
         COOKIE_DIR,
         "youtube_cookies.txt"
     )
 
-    shutil.copy2(
-        COOKIES_SOURCE,
-        cookie_path
-    )
+    try:
+        shutil.copyfile(
+            COOKIES_SOURCE,
+            cookie_path
+        )
 
-    return cookie_path
+        return cookie_path
+
+    except Exception as e:
+        print(
+            f"Cookie nusxalashda xatolik: {e}"
+        )
+        return None
 
 
 def build_youtube_options():
@@ -50,6 +63,12 @@ def build_youtube_options():
     opts = {
         "quiet": True,
         "no_warnings": True,
+
+        "extractor_args": {
+            "youtubepot-bgutilscript": {
+                "server_home": PO_TOKEN_SERVER
+            }
+        }
     }
 
     cookie_path = get_writable_cookies()
@@ -60,7 +79,10 @@ def build_youtube_options():
     return opts
 
 
-def search_youtube_flat(query: str, limit: int = 10) -> list:
+def search_youtube_flat(
+    query: str,
+    limit: int = 10
+) -> list:
 
     ydl_opts = build_youtube_options()
 
@@ -69,12 +91,24 @@ def search_youtube_flat(query: str, limit: int = 10) -> list:
         "skip_download": True,
     })
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+    try:
 
-        info = ydl.extract_info(
-            f"ytsearch{limit}:{query}",
-            download=False
+        with yt_dlp.YoutubeDL(
+            ydl_opts
+        ) as ydl:
+
+            info = ydl.extract_info(
+                f"ytsearch{limit}:{query}",
+                download=False
+            )
+
+    except Exception as e:
+
+        print(
+            f"YouTube qidiruv xatosi: {e}"
         )
+
+        raise
 
     entries = (
         info.get("entries", [])
@@ -103,9 +137,15 @@ def search_youtube_flat(query: str, limit: int = 10) -> list:
             or ""
         )
 
-        duration = entry.get("duration") or 0
+        duration = (
+            entry.get("duration")
+            or 0
+        )
 
-        if video_id and duration <= 900:
+        if (
+            video_id
+            and duration <= 900
+        ):
 
             results.append({
                 "video_id": video_id,
@@ -121,9 +161,13 @@ def search_youtube_flat(query: str, limit: int = 10) -> list:
     return results
 
 
-def download_yt_audio_sync(video_id: str) -> tuple:
+def download_yt_audio_sync(
+    video_id: str
+) -> tuple:
 
-    unique_id = str(uuid.uuid4())
+    unique_id = str(
+        uuid.uuid4()
+    )
 
     download_dir = os.path.join(
         config.TEMP_DIR,
@@ -136,13 +180,17 @@ def download_yt_audio_sync(video_id: str) -> tuple:
     )
 
     url = (
-        f"https://www.youtube.com/watch?v={video_id}"
+        "https://www.youtube.com/watch?v="
+        + video_id
     )
 
     ydl_opts = build_youtube_options()
 
     ydl_opts.update({
-        "format": "bestaudio/best",
+
+        "format": (
+            "bestaudio/best"
+        ),
 
         "outtmpl": os.path.join(
             download_dir,
@@ -158,25 +206,44 @@ def download_yt_audio_sync(video_id: str) -> tuple:
         ],
     })
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+    try:
 
-        ydl.download([url])
+        with yt_dlp.YoutubeDL(
+            ydl_opts
+        ) as ydl:
 
-    audio_path = next(
-        (
-            os.path.join(
+            ydl.download([url])
+
+    except Exception:
+
+        shutil.rmtree(
+            download_dir,
+            ignore_errors=True
+        )
+
+        raise
+
+    audio_path = None
+
+    for filename in os.listdir(
+        download_dir
+    ):
+
+        if filename.lower().endswith(
+            ".mp3"
+        ):
+
+            audio_path = os.path.join(
                 download_dir,
                 filename
             )
-            for filename in os.listdir(
-                download_dir
-            )
-            if filename.lower().endswith(".mp3")
-        ),
-        None
-    )
 
-    return download_dir, audio_path
+            break
+
+    return (
+        download_dir,
+        audio_path
+    )
 
 
 async def auto_cleanup_search_cache(
@@ -184,7 +251,9 @@ async def auto_cleanup_search_cache(
     delay: int = 1800
 ):
 
-    await asyncio.sleep(delay)
+    await asyncio.sleep(
+        delay
+    )
 
     SEARCH_CACHE.pop(
         search_id,
